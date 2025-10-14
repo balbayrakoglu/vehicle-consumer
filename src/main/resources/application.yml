@@ -1,0 +1,33 @@
+spring:
+  rabbitmq:
+    host: ${RABBIT_HOST:localhost}
+    port: ${RABBIT_PORT:5672}
+    username: ${RABBIT_USER:guest}
+    password: ${RABBIT_PASS:guest}
+    listener:
+      simple:
+        default-requeue-rejected: false
+        missing-queues-fatal: false
+        concurrency: 1
+        max-concurrency: 1
+        prefetch: 20
+        retry:
+          enabled: true
+          max-attempts: 3
+
+app:
+  rabbit:
+    queue: vehicle_queue
+    exchange: vehicle.exchange
+    routing-key: vehicle.*
+    declare-topology: false
+
+business:
+  speed-threshold-kmh: 50
+
+state:
+  telemetry:
+    expire-after-access-minutes: 30
+    maximum-size: 100000
+geofence:
+  geojson: classpath:berlin-subdistrict-polygon.json
