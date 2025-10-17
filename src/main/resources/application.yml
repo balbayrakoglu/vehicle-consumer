@@ -8,12 +8,14 @@ spring:
       simple:
         default-requeue-rejected: false
         missing-queues-fatal: false
-        concurrency: 1
+        concurrency: 3
         max-concurrency: 1
         prefetch: 20
         retry:
           enabled: true
           max-attempts: 3
+      direct:
+        acknowledge-mode: manual
 
 app:
   rabbit:
