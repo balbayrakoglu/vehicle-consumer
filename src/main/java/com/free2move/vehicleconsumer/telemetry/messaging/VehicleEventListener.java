@@ -14,15 +14,26 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class VehicleEventListener {
 
-  private final VehicleEventMapper vehicleEventMapper;
-  private final TelemetryApplicationService telemetryApplicationService;
+    private final VehicleEventMapper vehicleEventMapper;
+    private final TelemetryApplicationService telemetryApplicationService;
 
-  @RabbitListener(queues = "${app.rabbit.queue}", containerFactory = "rabbitListenerContainerFactory")
-  public void onMessage(@Valid VehicleEventIn in) {
-    var sample = vehicleEventMapper.toDomain(in);
-     log.info("Telemetry sample received: vin={}, ts={}, lat={}, lon={}",
-        sample.vehicleId(), sample.timestamp(), sample.position().latitude(),
-        sample.position().longitude());
+    @RabbitListener(
+            queues = "${app.rabbit.queue}",
+            containerFactory = "rabbitListenerContainerFactory"
+    )
+    public void onMessage(@Valid VehicleEventIn in) {
+        var sample = vehicleEventMapper.toDomain(in);
+
+        log.info(
+                "telemetry.received vin={} ts={} lat={} lon={}",
+                sample.vehicleId(),
+                sample.timestamp(),
+                sample.position().latitude(),
+                sample.position().longitude()
+        );
+
         telemetryApplicationService.process(sample);
-   }
+
+        log.info("telemetry.processed vin={} ts={}", sample.vehicleId(), sample.timestamp());
+    }
 }

@@ -1,7 +1,6 @@
 package com.free2move.vehicleconsumer.telemetry.state;
 
 import com.free2move.vehicleconsumer.telemetry.model.domain.TelemetrySample;
-
 import java.util.Optional;
 import lombok.Setter;
 
@@ -12,9 +11,15 @@ public final class VehicleTelemetryState {
   private boolean lastOverThreshold;
   private Boolean lastInside;
 
-  public Optional<TelemetrySample> lastSample() { return Optional.ofNullable(lastSample); }
+  public Optional<TelemetrySample> lastSample() {
+    return Optional.ofNullable(lastSample);
+  }
 
-  public boolean lastOverThreshold() { return lastOverThreshold; }
+  public boolean lastOverThreshold() {
+    return lastOverThreshold;
+  }
 
-  public Optional<Boolean> lastInside() { return Optional.ofNullable(lastInside); }
+  public Optional<Boolean> lastInside() {
+    return Optional.ofNullable(lastInside);
+  }
 }

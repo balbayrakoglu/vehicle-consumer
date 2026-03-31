@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-public class TelemetryIntegrationIT extends AbstractIntegrationTestBase {
+class TelemetryIntegrationIT extends AbstractIntegrationTestBase {
 
   @MockitoBean(name = "geoJsonGeofenceService")
   private GeoJsonGeofenceService geofenceService;
@@ -44,11 +44,11 @@ public class TelemetryIntegrationIT extends AbstractIntegrationTestBase {
     ArgumentCaptor<TelemetryDomainEvent> cap = ArgumentCaptor.forClass(TelemetryDomainEvent.class);
     Awaitility.await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
       verify(domainEventPublisher, atLeastOnce()).publish(cap.capture());
-      assertThat(cap.getAllValues().stream().anyMatch(e -> e instanceof SpeedExceededEvent)).isTrue();
+      assertThat(cap.getAllValues().stream().anyMatch(SpeedExceededEvent.class::isInstance)).isTrue();
     });
 
     long exceededCount = cap.getAllValues().stream()
-        .filter(e -> e instanceof SpeedExceededEvent).count();
+        .filter(SpeedExceededEvent.class::isInstance).count();
     assertThat(exceededCount).isEqualTo(1);
   }
 
@@ -66,7 +66,7 @@ public class TelemetryIntegrationIT extends AbstractIntegrationTestBase {
     sendToVehicleExchange("VIN00002", "2025-01-01T00:00:03Z", 52.0005, 13.0000);
 
     Awaitility.await().during(Duration.ofMillis(400)).atMost(Duration.ofSeconds(3))
-        .untilAsserted(() -> assertThat(cap.getAllValues().size()).isEqualTo(before));
+        .untilAsserted(() -> assertThat(cap.getAllValues()).hasSize(before));
   }
 
   @Test
@@ -79,7 +79,7 @@ public class TelemetryIntegrationIT extends AbstractIntegrationTestBase {
         .untilAsserted(() -> verify(domainEventPublisher, atLeastOnce()).publish(cap.capture()));
 
     List< GeofenceTransitionEvent > ge = cap.getAllValues().stream()
-        .filter(e -> e instanceof GeofenceTransitionEvent)
+        .filter(GeofenceTransitionEvent.class::isInstance)
         .map(e -> (GeofenceTransitionEvent) e)
         .toList();
 

@@ -1,23 +1,15 @@
 package com.free2move.vehicleconsumer.telemetry.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.isA;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import com.free2move.vehicleconsumer.config.BusinessProps;
-import com.free2move.vehicleconsumer.telemetry.events.DomainEventPublisher;
-import com.free2move.vehicleconsumer.telemetry.events.GeofenceTransitionEvent;
-import com.free2move.vehicleconsumer.telemetry.events.SpeedExceededEvent;
-import com.free2move.vehicleconsumer.telemetry.events.SpeedOverThresholdUpdateEvent;
-import com.free2move.vehicleconsumer.telemetry.events.TelemetryDomainEvent;
+import com.free2move.vehicleconsumer.telemetry.events.*;
 import com.free2move.vehicleconsumer.telemetry.geo.GeoJsonGeofenceService;
 import com.free2move.vehicleconsumer.telemetry.model.domain.GeoPoint;
 import com.free2move.vehicleconsumer.telemetry.model.domain.TelemetrySample;
@@ -390,6 +382,91 @@ class TelemetryApplicationServiceTest {
     verify(eventPublisher, times(1)).publish(cap.capture());
     assertInstanceOf(SpeedOverThresholdUpdateEvent.class, cap.getValue());
     assertTrue(state.lastOverThreshold());
+  }
+
+
+  @Test
+  void process_shouldNotAdvanceState_whenSpeedEventPublishFails() {
+    VehicleId vid = new VehicleId("VIN-1");
+
+    GeoPoint prevPt = new GeoPoint(52.5200, 13.4050);
+    GeoPoint currPt = new GeoPoint(52.5300, 13.4050);
+
+    TelemetrySample prev = new TelemetrySample(
+            vid,
+            Instant.parse("2026-03-31T10:00:00Z"),
+            prevPt
+    );
+
+    TelemetrySample curr = new TelemetrySample(
+            vid,
+            Instant.parse("2026-03-31T10:01:00Z"),
+            currPt
+    );
+
+    VehicleTelemetryState state = new VehicleTelemetryState();
+    state.setLastSample(prev);
+    state.setLastInside(false);
+    state.setLastOverThreshold(false);
+
+    when(stateStore.getOrCreate(vid)).thenReturn(state);
+    when(speedCalculator.kmhBetween(prev, curr)).thenReturn(120.0);
+    when(businessProps.speedThresholdKmh()).thenReturn(50.0);
+    when(geoJsonGeofenceService.contains(currPt)).thenReturn(false);
+
+    doThrow(new RuntimeException("broker down"))
+            .when(eventPublisher)
+            .publish(any(SpeedExceededEvent.class));
+
+    assertThrows(DomainEventPublishException.class, () -> telemetryApplicationService.process(curr));
+
+    assertEquals(prev, state.lastSample().orElseThrow());
+    assertFalse(state.lastOverThreshold());
+    assertEquals(Boolean.FALSE, state.lastInside().orElseThrow());
+
+    verify(eventPublisher, times(1)).publish(any(SpeedExceededEvent.class));
+  }
+
+  @Test
+  void process_shouldNotAdvanceState_whenGeofenceEventPublishFails() {
+    VehicleId vid = new VehicleId("VIN-2");
+
+    GeoPoint prevPt = new GeoPoint(52.5200, 13.4050);
+    GeoPoint currPt = new GeoPoint(52.5210, 13.4060);
+
+    TelemetrySample prev = new TelemetrySample(
+            vid,
+            Instant.parse("2026-03-31T10:00:00Z"),
+            prevPt
+    );
+
+    TelemetrySample curr = new TelemetrySample(
+            vid,
+            Instant.parse("2026-03-31T10:01:00Z"),
+            currPt
+    );
+
+    VehicleTelemetryState state = new VehicleTelemetryState();
+    state.setLastSample(prev);
+    state.setLastInside(false);
+    state.setLastOverThreshold(false);
+
+    when(stateStore.getOrCreate(vid)).thenReturn(state);
+    when(speedCalculator.kmhBetween(prev, curr)).thenReturn(10.0);
+    when(businessProps.speedThresholdKmh()).thenReturn(50.0);
+    when(geoJsonGeofenceService.contains(currPt)).thenReturn(true);
+
+    doThrow(new RuntimeException("broker down"))
+            .when(eventPublisher)
+            .publish(any(GeofenceTransitionEvent.class));
+
+    assertThrows(DomainEventPublishException.class, () -> telemetryApplicationService.process(curr));
+
+    assertEquals(prev, state.lastSample().orElseThrow());
+    assertFalse(state.lastOverThreshold());
+    assertEquals(Boolean.FALSE, state.lastInside().orElseThrow());
+
+    verify(eventPublisher, times(1)).publish(any(GeofenceTransitionEvent.class));
   }
 }
 

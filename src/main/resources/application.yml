@@ -6,16 +6,15 @@ spring:
     password: ${RABBIT_PASS:guest}
     listener:
       simple:
+        acknowledge-mode: auto
         default-requeue-rejected: false
         missing-queues-fatal: false
-        concurrency: 3
-        max-concurrency: 1
+        concurrency: 1
+        max-concurrency: 3
         prefetch: 20
         retry:
           enabled: true
           max-attempts: 3
-      direct:
-        acknowledge-mode: manual
 
 app:
   rabbit:
@@ -31,5 +30,6 @@ state:
   telemetry:
     expire-after-access-minutes: 30
     maximum-size: 100000
+
 geofence:
   geojson: classpath:berlin-subdistrict-polygon.json
