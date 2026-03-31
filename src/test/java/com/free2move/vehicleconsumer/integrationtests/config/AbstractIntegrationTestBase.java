@@ -1,67 +1,62 @@
 package com.free2move.vehicleconsumer.integrationtests.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.free2move.vehicleconsumer.VehicleConsumerApplication;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.function.Supplier;
-import lombok.Getter;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.containers.RabbitMQContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
-@Getter
-@AutoConfigureMockMvc
-@SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {"spring.application.name=telemetryIT"},
-    classes = VehicleConsumerApplication.class
-)
-public abstract class AbstractIntegrationTestBase extends IntegrationTestContainer {
+@SpringBootTest
+@Testcontainers(disabledWithoutDocker = true)
+public abstract class AbstractIntegrationTestBase {
 
-  private static final Supplier<Object> rabbitHost =
-      () -> rabbitContainer == null ? "localhost" : rabbitContainer.getHost();
+  @Container
+  static final RabbitMQContainer RABBITMQ =
+          new RabbitMQContainer("rabbitmq:3.13-management");
 
-  private static final Supplier<Object> rabbitPort =
-      () -> rabbitContainer == null ? 5672 : rabbitContainer.getAmqpPort();
+  @DynamicPropertySource
+  static void registerRabbitProperties(DynamicPropertyRegistry registry) {
+    registry.add("spring.rabbitmq.host", RABBITMQ::getHost);
+    registry.add("spring.rabbitmq.port", RABBITMQ::getAmqpPort);
+    registry.add("spring.rabbitmq.username", RABBITMQ::getAdminUsername);
+    registry.add("spring.rabbitmq.password", RABBITMQ::getAdminPassword);
 
-  @Autowired
-  private MockMvc mockMvc;
-  @Autowired
-  private TestRestTemplate restTemplate;
-  @Autowired
-  private ObjectMapper objectMapper;
+    registry.add("app.rabbit.declare-topology", () -> true);
+    registry.add("app.rabbit.queue", () -> "vehicle_queue");
+    registry.add("app.rabbit.exchange", () -> "vehicle.exchange");
+    registry.add("app.rabbit.routing-key", () -> "vehicle.*");
+  }
+
   @Autowired
   protected RabbitTemplate rabbitTemplate;
 
-  @DynamicPropertySource
-  static void configureProperties(final DynamicPropertyRegistry r) {
+  @Autowired
+  protected ObjectMapper objectMapper;
 
-    r.add("spring.rabbitmq.host", rabbitHost);
-    r.add("spring.rabbitmq.port", rabbitPort);
-    r.add("spring.rabbitmq.username", () -> "guest");
-    r.add("spring.rabbitmq.password", () -> "guest");
-    r.add("spring.rabbitmq.listener.simple.concurrency", () -> "1");
-    r.add("spring.rabbitmq.listener.simple.max-concurrency", () -> "1");
-    r.add("spring.rabbitmq.listener.simple.prefetch", () -> "10");
-    r.add("spring.rabbitmq.listener.simple.missing-queues-fatal", () -> "false");
-    r.add("app.rabbit.declare-topology", () -> "true");
-    r.add("app.rabbit.exchange", () -> "vehicle.exchange");
-    r.add("app.rabbit.queue", () -> "vehicle.queue");
-    r.add("app.rabbit.routing-key", () -> "vehicle.*");
-    r.add("business.speed-threshold-kmh", () -> "50");
+  @BeforeEach
+  void beforeEachBase() {
+    rabbitTemplate.setExchange("vehicle.exchange");
   }
 
-  protected void sendToVehicleExchange(String vin, String isoTs, double lat, double lon) {
-    Map<String, Object> payload = Map.of(
-        "vin", vin,
-        "timestamp", isoTs,
-        "location", Map.of("lat", lat, "lon", lon)
-    );
-    rabbitTemplate.convertAndSend("vehicle.exchange", "vehicle.test", payload);
+  protected void sendToVehicleExchange(String vin, String timestamp, double latitude, double longitude) {
+    try {
+      Map<String, Object> payload = new LinkedHashMap<>();
+      payload.put("vin", vin);
+      payload.put("timestamp", timestamp);
+      payload.put("latitude", latitude);
+      payload.put("longitude", longitude);
+
+      String json = objectMapper.writeValueAsString(payload);
+      rabbitTemplate.convertAndSend("vehicle.exchange", "vehicle.position", json);
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to publish test vehicle event", e);
+    }
   }
 }
